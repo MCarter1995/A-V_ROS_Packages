@@ -1,0 +1,9 @@
+<launch>
+	<node pkg="audio_player" name="audio_player" type="audio_player.py" output="screen"/>
+		<!--Audio File Location-->
+		<param name="/audio_file_path" value="$(find audio_player)/src/audiofiles"/>
+		<!--Waypoint Topic-->
+		<param name="/wp_topic" value="/waypoint"/> 
+		<!--Audio Status Topic-->
+		<param name="/as_topic" value="audio_status"/> 
+</launch>

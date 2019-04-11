@@ -1,0 +1,8 @@
+<launch>
+	<node name="cam_rect_pub" pkg="cam_rect_pub" type="cam_rect_pub" output="screen"/>
+		<param name="cam_intrinsic_loc" value="$(find cam_rect_pub)/src/data/intrinsics.xml"/>
+		<param name="cam_right"  		value="1"/>
+		<param name="cam_left"   		value="2"/>
+		<param name="cam_width"  		value="1920"/>
+		<param name="cam_height" 		value="1080"/>
+</launch>

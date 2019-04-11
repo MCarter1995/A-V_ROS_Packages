@@ -1,8 +1,9 @@
 #include <ros/ros.h>
 #include <ros/console.h>
 #include <image_transport/image_transport.h>
-#include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
+#include <sensor_msgs/CameraInfo.h>
+#include <cv_bridge/cv_bridge.h>
 #include <string>
 #include <iostream>
 #include <sstream>
@@ -29,6 +30,39 @@ T getParam(ros::NodeHandle n, const std::string& name, const T& defaultValue)
   return defaultValue;
 }
 
+int fillCameraInfoMessage(const std::string & fileName, sensor_msgs::CameraInfo &msg, cv::Mat )
+{
+  int ii;
+  cv::Mat KK(3, 3, CV_64FC1);
+  cv::Mat DD(5, 1, CV_64FC1);
+  cv::FileStorage fs;
+
+  //open file
+  fs.open(fileName, cv::FileStorage::READ);
+  if ( !fs.isOpened() )
+  {
+    std::cout << "WARNING: Camera Calibration File " << fileName << " Not Found." << std::endl;
+    std:: cout << "WARNING: camera_info topic will not provide right data" << std::endl;
+    return BFLY_ERROR;
+  }
+
+  //fill static part of the message
+  msg.header.frame_id = "bfly_camera";
+  msg.binning_x = 0;
+  msg.binning_x = 0;
+  msg.roi.width = 0;
+  msg.roi.height = 0;
+  for (ii = 0; ii < 9; ii++) msg.R[ii] = 0;
+  msg.width = (int)fs["image_Width"];
+  msg.height = (int)fs["image_Height"];
+  fs["Camera_Matrix"] >> KK;
+  for (ii = 0; ii < 9; ii++) msg.K[ii] = KK.at<double>(ii);
+  msg.distortion_model = "plumb_bob";
+  fs["Distortion_Coefficients"] >> DD;
+  for (ii = 0; ii < 5; ii++) msg.D.push_back(DD.at<double>(ii));
+
+}
+
 
 
 int main(int argc, char** argv)
@@ -53,6 +87,12 @@ int main(int argc, char** argv)
   image_transport::Publisher pub_right = it.advertise("cameras/image_rect_right", 1);
   image_transport::Publisher pub_left = it.advertise("cameras/image_rect_left", 1);
 
+  ros::Publisher pub_info_right = nh.advertise<sensor_msgs::CameraInfo>("cameras/image_rect_right/camera_info", 100);
+  ros::Publisher pub_info_left = nh.advertise<sensor_msgs::CameraInfo>("cameras/image_rect_left/camera_info", 100);
+
+  sensor_msgs::CameraInfo cameraInfoMessage_right;
+  sensor_msgs::CameraInfo cameraInfoMessage_right;
+
   bool rect = false;
 
   Mat rmap[2][2];
@@ -69,6 +109,30 @@ int main(int argc, char** argv)
     fs["D1"] >> D1;
     fs["M2"] >> M2;
     fs["D2"] >> D2;
+
+    cameraInfoMessage_right.frame_id = "right_camera";
+    cameraInfoMessage_right.binning_x = 0;
+    cameraInfoMessage_right.binning_y = 0;
+    cameraInfoMessage_right.roi.width = 0;
+    cameraInfoMessage_right.roi.height = 0;
+    cameraInfoMessage_right.width = cam_width;
+    cameraInfoMessage_right.height = cam_height;
+    for (int i = 0; i < 9; i++) {cameraInfoMessage_right.R[i] = 0;}
+    for (int i = 0; i < 9; i++) {cameraInfoMessage_right.K[i] = M1.at<double>(i);}
+    for (int i = 0; i < 5; i++) {cameraInfoMessage_right.D.push_back(D1.at<double>(i));}
+    cameraInfoMessage_right.distortion_model = "plumb_bob";
+
+    cameraInfoMessage_left.frame_id = "left_camera";
+    cameraInfoMessage_left.binning_x = 0;
+    cameraInfoMessage_left.binning_y = 0;
+    cameraInfoMessage_left.roi.width = 0;
+    cameraInfoMessage_left.roi.height = 0;
+    cameraInfoMessage_left.width = cam_width;
+    cameraInfoMessage_left.height = cam_height;
+    for (int i = 0; i < 9; i++) {cameraInfoMessage_left.R[i] = 0;}
+    for (int i = 0; i < 9; i++) {cameraInfoMessage_left.K[i] = M2.at<double>(i);}
+    for (int i = 0; i < 5; i++) {cameraInfoMessage_left.D.push_back(D2.at<double>(i));}
+    cameraInfoMessage_left.distortion_model = "plumb_bob";
 
     Mat R1 = Mat_<double>::eye(3, 3);
     Mat R2 = Mat_<double>::eye(3, 3);
@@ -100,7 +164,7 @@ int main(int argc, char** argv)
 
   Mat r_img, l_img;
   Mat r_rimg, l_rimg;
-  
+
   sensor_msgs::ImagePtr right_img;
   sensor_msgs::ImagePtr left_img;
 
@@ -121,7 +185,10 @@ int main(int argc, char** argv)
       right_img = cv_bridge::CvImage(std_msgs::Header(), "bgr8", r_img).toImageMsg();
       left_img  = cv_bridge::CvImage(std_msgs::Header(), "bgr8", l_img).toImageMsg();
     }
-
+    cameraInfoMessage_right.header.stamp = ros::Time::now();
+    cameraInfoMessage_left.header.stamp = ros::Time::now();
+    pub_info_right.publish(cameraInfoMessage_right);
+    pub_info_left.publish(cameraInfoMessage_left);
 
     pub_right.publish(right_img);
     pub_left.publish(left_img);
